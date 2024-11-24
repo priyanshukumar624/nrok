@@ -23,11 +23,16 @@ struct RegisterRequest {
     email: String,
 }
 
+#[derive(Debug, Deserialize)]
+struct LoginRequest {
+    email: String,
+}
+
 #[derive(Serialize)]
 struct ApiResponse {
     message: String,
     name: Option<String>,
-    email: String,
+    email: Option<String>,
     status: String,
 }
 
@@ -36,6 +41,11 @@ lazy_static! {
     static ref REGISTER_REQUESTS: Counter = prometheus::register_counter!(
         "register_requests_total",
         "Total number of registration requests"
+    )
+    .unwrap();
+    static ref LOGIN_REQUESTS: Counter = prometheus::register_counter!(
+        "login_requests_total",
+        "Total number of login requests"
     )
     .unwrap();
 }
@@ -71,7 +81,7 @@ async fn register_user(user: web::Json<RegisterRequest>) -> impl Responder {
             return HttpResponse::InternalServerError().json(ApiResponse {
                 message: "Failed to connect to database".to_string(),
                 name: None,
-                email: user.email.clone(),
+                email: Some(user.email.clone()),
                 status: "error".to_string(),
             });
         }
@@ -86,14 +96,13 @@ async fn register_user(user: web::Json<RegisterRequest>) -> impl Responder {
         return HttpResponse::BadRequest().json(ApiResponse {
             message: "User already exists".to_string(),
             name: Some(name),
-            email,
+            email: Some(email),
             status: "error".to_string(),
         });
     }
 
     // Insert the new user into the database
     let insert_query = "INSERT INTO users (name, email) VALUES ($1, $2)";
-
     match client
         .execute(insert_query, &[&user.name, &user.email])
         .await
@@ -103,7 +112,7 @@ async fn register_user(user: web::Json<RegisterRequest>) -> impl Responder {
             HttpResponse::Ok().json(ApiResponse {
                 message: "Registration successful".to_string(),
                 name: Some(user.name.clone()),
-                email: user.email.clone(),
+                email: Some(user.email.clone()),
                 status: "success".to_string(),
             })
         }
@@ -112,7 +121,60 @@ async fn register_user(user: web::Json<RegisterRequest>) -> impl Responder {
             HttpResponse::InternalServerError().json(ApiResponse {
                 message: "Failed to register user".to_string(),
                 name: None,
-                email: user.email.clone(),
+                email: Some(user.email.clone()),
+                status: "error".to_string(),
+            })
+        }
+    }
+}
+
+#[post("/login")]
+#[instrument]
+async fn login_user(user: web::Json<LoginRequest>) -> impl Responder {
+    LOGIN_REQUESTS.inc();
+
+    let client = match connect_to_db().await {
+        Ok(client) => client,
+        Err(e) => {
+            error!("Error connecting to database: {}", e);
+            return HttpResponse::InternalServerError().json(ApiResponse {
+                message: "Failed to connect to database".to_string(),
+                name: None,
+                email: Some(user.email.clone()),
+                status: "error".to_string(),
+            });
+        }
+    };
+
+    // Check if the user exists
+    let query = "SELECT name, email FROM users WHERE email = $1";
+    match client.query_opt(query, &[&user.email]).await {
+        Ok(Some(row)) => {
+            let name: String = row.get(0);
+            let email: String = row.get(1);
+            info!("User found: {}", email);
+            HttpResponse::Ok().json(ApiResponse {
+                message: "Login successful".to_string(),
+                name: Some(name),
+                email: Some(email),
+                status: "success".to_string(),
+            })
+        }
+        Ok(None) => {
+            info!("User not found: {}", user.email);
+            HttpResponse::BadRequest().json(ApiResponse {
+                message: "User does not exist".to_string(),
+                name: None,
+                email: Some(user.email.clone()),
+                status: "error".to_string(),
+            })
+        }
+        Err(e) => {
+            error!("Error querying user: {}", e);
+            HttpResponse::InternalServerError().json(ApiResponse {
+                message: "Failed to query user".to_string(),
+                name: None,
+                email: Some(user.email.clone()),
                 status: "error".to_string(),
             })
         }
@@ -134,14 +196,13 @@ async fn main() -> std::io::Result<()> {
                     .max_age(3600),
             )
             .service(register_user)
-            // .service(register_simple)
+            .service(login_user)
             .route("/metrics", web::get().to(metrics_handler))
     })
     .bind(("0.0.0.0", 8080))? // Bind to 0.0.0.0 so it's accessible to all local devices
     .run()
     .await
 }
-
 
 // Metrics endpoint handler
 async fn metrics_handler() -> impl Responder {
