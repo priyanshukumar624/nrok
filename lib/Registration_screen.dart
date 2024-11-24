@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:google_sign_in/google_sign_in.dart';
 
-// Main Registration Page
 class RegistrationScreen extends StatefulWidget {
   @override
   _RegistrationPageState createState() => _RegistrationPageState();
@@ -34,8 +33,8 @@ class _RegistrationPageState extends State<RegistrationScreen> {
     );
   }
 
-  // Register user with Google Sign-In
-  Future<void> registerUser(BuildContext context) async {
+  // Handle Google Sign-In for Registration or Login
+  Future<void> handleGoogleAuth(BuildContext context, String action) async {
     setState(() {
       _isLoading = true;
     });
@@ -54,9 +53,14 @@ class _RegistrationPageState extends State<RegistrationScreen> {
 
         print('Request Body: $requestBody'); // Log the request body
 
+        // Define backend URL based on action
+        String url = action == 'register'
+            ? 'http://192.168.1.4:8080/register'
+            : 'http://192.168.1.4:8080/login';
+
         // Send the request to the backend
         final response = await http.post(
-          Uri.parse('http://192.168.1.4:8080/register'), // Use correct backend URL
+          Uri.parse(url),
           headers: {'Content-Type': 'application/json'},
           body: requestBody,
         );
@@ -67,20 +71,46 @@ class _RegistrationPageState extends State<RegistrationScreen> {
         if (response.statusCode == 200) {
           final data = jsonDecode(response.body);
 
-          if (data['status'] == 'success') {
-            // If registration is successful, navigate to the success page
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => RegistrationSuccessPage(email: user.email),
-              ),
-            );
-          } else {
-            // Handle unexpected success response
-            _showErrorDialog(context, "Unexpected response from server.");
+          if (action == 'register') {
+            if (data['status'] == 'success') {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) =>
+                      RegistrationSuccessPage(email: user.email),
+                ),
+              );
+            } else if (data['status'] == 'error' &&
+                data['message'] == 'User already exists') {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) =>
+                      UserExistsPage(email: user.email),
+                ),
+              );
+            }
+          } else if (action == 'login') {
+            if (data['status'] == 'success') {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => LoginSuccessPage(email: user.email),
+                ),
+              );
+            } else if (data['status'] == 'error' &&
+                data['message'] == 'User does not exist') {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) =>
+                      UserDoesNotExistPage(email: user.email),
+                ),
+              );
+            }
           }
         } else if (response.statusCode == 400) {
-          // Handle "User already exists" case
+          // Handle both "User already exists" and "User does not exist" cases
           final jsonResponse = jsonDecode(response.body);
 
           if (jsonResponse['message'] == 'User already exists') {
@@ -90,26 +120,25 @@ class _RegistrationPageState extends State<RegistrationScreen> {
                 builder: (context) => UserExistsPage(email: jsonResponse['email']),
               ),
             );
-          } else {
-            // Handle other 400 errors
-            _showErrorDialog(
+          } else if (jsonResponse['message'] == 'User does not exist') {
+            Navigator.push(
               context,
-              "Registration failed: ${jsonResponse['message'] ?? "Unknown error"}",
+              MaterialPageRoute(
+                builder: (context) =>
+                    UserDoesNotExistPage(email: jsonResponse['email']),
+              ),
             );
           }
         } else {
-          // Handle other non-200 responses
           _showErrorDialog(
             context,
             "Failed to connect to backend. Status: ${response.statusCode}\nResponse Body: ${response.body}",
           );
         }
       } else {
-        // If Google Sign-In is cancelled
         print("Google Sign-In cancelled by user.");
       }
     } catch (e) {
-      // Catch any exceptions during registration
       print("Error: $e");
       _showErrorDialog(context, "An error occurred: $e");
     } finally {
@@ -122,13 +151,23 @@ class _RegistrationPageState extends State<RegistrationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text("Register with Google")),
+      appBar: AppBar(title: Text("Google Authentication")),
       body: Center(
         child: _isLoading
             ? CircularProgressIndicator() // Show loading spinner while processing
-            : ElevatedButton(
-                onPressed: () => registerUser(context),
-                child: Text("Register with Google"),
+            : Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  ElevatedButton(
+                    onPressed: () => handleGoogleAuth(context, 'register'),
+                    child: Text("Register with Google"),
+                  ),
+                  SizedBox(height: 20),
+                  ElevatedButton(
+                    onPressed: () => handleGoogleAuth(context, 'login'),
+                    child: Text("Login with Google"),
+                  ),
+                ],
               ),
       ),
     );
@@ -151,6 +190,22 @@ class RegistrationSuccessPage extends StatelessWidget {
   }
 }
 
+// Login Success Page
+class LoginSuccessPage extends StatelessWidget {
+  final String email;
+  LoginSuccessPage({required this.email});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text("Login Successful")),
+      body: Center(
+        child: Text("You are successfully logged in!\nEmail: $email"),
+      ),
+    );
+  }
+}
+
 // User Already Exists Page
 class UserExistsPage extends StatelessWidget {
   final String email;
@@ -163,6 +218,26 @@ class UserExistsPage extends StatelessWidget {
       body: Center(
         child: Text(
           "User already exists!\nEmail: $email",
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 18),
+        ),
+      ),
+    );
+  }
+}
+
+// User Does Not Exist Page
+class UserDoesNotExistPage extends StatelessWidget {
+  final String email;
+  UserDoesNotExistPage({required this.email});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text("User Does Not Exist")),
+      body: Center(
+        child: Text(
+          "User does not exist in the database!\nEmail: $email",
           textAlign: TextAlign.center,
           style: TextStyle(fontSize: 18),
         ),
