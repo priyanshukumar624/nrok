@@ -250,7 +250,7 @@ class UserDoesNotExistPage extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center, // Center the content vertically
           children: [
             Text(
-              "User does not exist in the database Would you like to Register!\nEmail: $email",
+              "User does not exist in the database Would you like to register!\nEmail: $email",
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 18),
             ),
