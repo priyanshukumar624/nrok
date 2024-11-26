@@ -1,5 +1,5 @@
-use actix_web::{post, web, App, HttpResponse, HttpServer, Responder};
 use actix_cors::Cors; // Import CORS
+use actix_web::{post, web, App, HttpResponse, HttpServer, Responder};
 use dotenv::dotenv;
 use lazy_static::lazy_static;
 use log::{error, info};
@@ -28,6 +28,18 @@ struct LoginRequest {
     email: String,
 }
 
+#[derive(Debug, Deserialize)]
+struct ManualRegisterRequest {
+    email: String,
+    mobile: String,
+    gender: String,
+    address: String,
+    city: String,
+    pincode: String,
+    medical_condition: String,
+    password: String,
+}
+
 #[derive(Serialize)]
 struct ApiResponse {
     message: String,
@@ -43,11 +55,9 @@ lazy_static! {
         "Total number of registration requests"
     )
     .unwrap();
-    static ref LOGIN_REQUESTS: Counter = prometheus::register_counter!(
-        "login_requests_total",
-        "Total number of login requests"
-    )
-    .unwrap();
+    static ref LOGIN_REQUESTS: Counter =
+        prometheus::register_counter!("login_requests_total", "Total number of login requests")
+            .unwrap();
 }
 
 #[instrument]
@@ -181,6 +191,66 @@ async fn login_user(user: web::Json<LoginRequest>) -> impl Responder {
     }
 }
 
+#[post("/manual_register")]
+#[instrument]
+async fn manual_register_user(user: web::Json<ManualRegisterRequest>) -> impl Responder {
+    let client = match connect_to_db().await {
+        Ok(client) => client,
+        Err(e) => {
+            error!("Error connecting to database: {}", e);
+            return HttpResponse::InternalServerError().json(ApiResponse {
+                message: "Failed to connect to database".to_string(),
+                name: None,
+                email: Some(user.email.clone()),
+                status: "error".to_string(),
+            });
+        }
+    };
+
+    // Insert the additional information into the database
+    let insert_query = "
+        UPDATE users 
+        SET mobile = $1, gender = $2, address = $3, city = $4, pincode = $5, medical_condition = $6, password = $7 
+        WHERE email = $8
+    ";
+
+    match client
+        .execute(
+            insert_query,
+            &[
+                &user.mobile,
+                &user.gender,
+                &user.address,
+                &user.city,
+                &user.pincode,
+                &user.medical_condition,
+                &user.password,
+                &user.email,
+            ],
+        )
+        .await
+    {
+        Ok(_) => {
+            info!("User manual registration complete for: {}", user.email);
+            HttpResponse::Ok().json(ApiResponse {
+                message: "Manual registration successful".to_string(),
+                name: None,
+                email: Some(user.email.clone()),
+                status: "success".to_string(),
+            })
+        }
+        Err(e) => {
+            error!("Error updating user info: {}: {}", user.email, e);
+            HttpResponse::InternalServerError().json(ApiResponse {
+                message: "Failed to update user information".to_string(),
+                name: None,
+                email: Some(user.email.clone()),
+                status: "error".to_string(),
+            })
+        }
+    }
+}
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     env_logger::init();
@@ -197,6 +267,7 @@ async fn main() -> std::io::Result<()> {
             )
             .service(register_user)
             .service(login_user)
+            .service(manual_register_user) // Add the manual registration endpoint
             .route("/metrics", web::get().to(metrics_handler))
     })
     .bind(("0.0.0.0", 8080))? // Bind to 0.0.0.0 so it's accessible to all local devices
