@@ -104,7 +104,8 @@ class _RegistrationPageState extends State<RegistrationScreen> {
                 MaterialPageRoute(
                   builder: (context) => UserDoesNotExistPage(
                     email: user.email,
-                    onRegisterWithGoogle: handleGoogleAuth, // Pass function here
+                    onRegisterWithGoogle:
+                        handleGoogleAuth, // Pass function here
                   ),
                 ),
               );
@@ -126,11 +127,10 @@ class _RegistrationPageState extends State<RegistrationScreen> {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) =>
-                    UserDoesNotExistPage(
-                      email: jsonResponse['email'],
-                      onRegisterWithGoogle: handleGoogleAuth, // Pass function
-                    ),
+                builder: (context) => UserDoesNotExistPage(
+                  email: jsonResponse['email'],
+                  onRegisterWithGoogle: handleGoogleAuth, // Pass function
+                ),
               ),
             );
           }
@@ -246,17 +246,20 @@ class UserDoesNotExistPage extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: Text("User Does Not Exist")),
       body: Center(
-        child: Column( // Use Column to arrange the text and button vertically
-          mainAxisAlignment: MainAxisAlignment.center, // Center the content vertically
+        child: Column(
+          // Use Column to arrange the text and button vertically
+          mainAxisAlignment:
+              MainAxisAlignment.center, // Center the content vertically
           children: [
             Text(
-              "User does not exist in the database Would you like to register!\nEmail: $email",
+              "User does not exist in the database Would you like to Register!\nEmail: $email",
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 18),
             ),
             SizedBox(height: 20), // Add spacing between text and button
             ElevatedButton(
-              onPressed: () => onRegisterWithGoogle(context, 'register'), // Use passed callback
+              onPressed: () => onRegisterWithGoogle(
+                  context, 'register'), // Use passed callback
               child: Text("Register with Google"),
             ),
           ],
