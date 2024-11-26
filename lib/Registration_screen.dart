@@ -85,8 +85,7 @@ class _RegistrationPageState extends State<RegistrationScreen> {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) =>
-                      UserExistsPage(email: user.email),
+                  builder: (context) => UserExistsPage(email: user.email),
                 ),
               );
             }
@@ -103,8 +102,10 @@ class _RegistrationPageState extends State<RegistrationScreen> {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) =>
-                      UserDoesNotExistPage(email: user.email),
+                  builder: (context) => UserDoesNotExistPage(
+                    email: user.email,
+                    onRegisterWithGoogle: handleGoogleAuth, // Pass function here
+                  ),
                 ),
               );
             }
@@ -117,7 +118,8 @@ class _RegistrationPageState extends State<RegistrationScreen> {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) => UserExistsPage(email: jsonResponse['email']),
+                builder: (context) =>
+                    UserExistsPage(email: jsonResponse['email']),
               ),
             );
           } else if (jsonResponse['message'] == 'User does not exist') {
@@ -125,7 +127,10 @@ class _RegistrationPageState extends State<RegistrationScreen> {
               context,
               MaterialPageRoute(
                 builder: (context) =>
-                    UserDoesNotExistPage(email: jsonResponse['email']),
+                    UserDoesNotExistPage(
+                      email: jsonResponse['email'],
+                      onRegisterWithGoogle: handleGoogleAuth, // Pass function
+                    ),
               ),
             );
           }
@@ -229,17 +234,32 @@ class UserExistsPage extends StatelessWidget {
 // User Does Not Exist Page
 class UserDoesNotExistPage extends StatelessWidget {
   final String email;
-  UserDoesNotExistPage({required this.email});
+  final Function(BuildContext, String) onRegisterWithGoogle; // Add callback
+
+  UserDoesNotExistPage({
+    required this.email,
+    required this.onRegisterWithGoogle, // Pass callback when creating this page
+  });
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text("User Does Not Exist")),
       body: Center(
-        child: Text(
-          "User does not exist in the database!\nEmail: $email",
-          textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 18),
+        child: Column( // Use Column to arrange the text and button vertically
+          mainAxisAlignment: MainAxisAlignment.center, // Center the content vertically
+          children: [
+            Text(
+              "User does not exist in the database!\nEmail: $email",
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 18),
+            ),
+            SizedBox(height: 20), // Add spacing between text and button
+            ElevatedButton(
+              onPressed: () => onRegisterWithGoogle(context, 'register'), // Use passed callback
+              child: Text("Register with Google"),
+            ),
+          ],
         ),
       ),
     );
